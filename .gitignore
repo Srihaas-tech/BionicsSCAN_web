@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Local builds and test output
+dist/
+coverage/
+.test-dist/
+*.tsbuildinfo
+
+# Environment files and secrets
+.env*
+!.env.example
+credentials.json
+**/credentials.json
+*.pem
+*.key
+
+# Vercel
+.vercel/
+
+# Database files
+drizzle-generated/
+*.sqlite
+*.sqlite3
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Archives
+*.zip
