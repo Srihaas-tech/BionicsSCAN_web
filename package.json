@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@bwip-js/node": "^4.11.2",
-    "@zxing/browser": "^0.1.5",
+    "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "dotenv": "^17.2.1",
     "drizzle-orm": "^0.45.2",
