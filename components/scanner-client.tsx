@@ -1,5 +1,8 @@
 "use client";
-
+import {
+  BarcodeFormat,
+  DecodeHintType,
+} from "@zxing/library";
 import {
   FormEvent,
   useCallback,
@@ -166,8 +169,16 @@ export function ScannerClient() {
     setMessage("Requesting camera access…");
 
     try {
-      const reader = new BrowserMultiFormatReader();
+      const hints = new Map();
 
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+      ]);
+
+    hints.set(DecodeHintType.TRY_HARDER, true);
+
+    const reader = new BrowserMultiFormatReader(hints);
       readerRef.current = reader;
 
       const constraints: MediaStreamConstraints = {
