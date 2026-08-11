@@ -210,7 +210,6 @@ export function ScannerClient() {
       await video.play().catch(() => undefined);
 
       setActive(true);
-      setMessage("Camera active. Hold a barcode inside the frame.");
 
       await loadDevices();
     } catch (error) {
