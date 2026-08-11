@@ -1428,3 +1428,224 @@ input {
     font-size: 7pt;
   }
 }
+
+/* Scanner redesign */
+
+.scanner-card-clean {
+  padding: 18px;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 28px;
+}
+
+.scanner-view-clean {
+  position: relative;
+  min-height: 520px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #171a1b;
+}
+
+.scanner-video {
+  display: block;
+  width: 100%;
+  height: 520px;
+  object-fit: cover;
+  background: #171a1b;
+}
+
+.camera-state-badge {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  z-index: 5;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 10px 16px;
+
+  border-radius: 999px;
+
+  background: rgba(10, 12, 13, 0.82);
+  color: #ffffff;
+
+  font-weight: 700;
+}
+
+.camera-state-dot {
+  width: 10px;
+  height: 10px;
+
+  border-radius: 50%;
+
+  background: #20c77a;
+}
+
+.scanner-frame-clean {
+  position: absolute;
+  inset: 24% 20%;
+
+  pointer-events: none;
+}
+
+.corner {
+  position: absolute;
+
+  width: 42px;
+  height: 42px;
+
+  border-color: #ffffff;
+  border-style: solid;
+}
+
+.corner-top-left {
+  top: 0;
+  left: 0;
+
+  border-width: 4px 0 0 4px;
+  border-radius: 10px 0 0 0;
+}
+
+.corner-top-right {
+  top: 0;
+  right: 0;
+
+  border-width: 4px 4px 0 0;
+  border-radius: 0 10px 0 0;
+}
+
+.corner-bottom-left {
+  bottom: 0;
+  left: 0;
+
+  border-width: 0 0 4px 4px;
+  border-radius: 0 0 0 10px;
+}
+
+.corner-bottom-right {
+  right: 0;
+  bottom: 0;
+
+  border-width: 0 4px 4px 0;
+  border-radius: 0 0 10px 0;
+}
+
+.scanner-line-clean {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
+
+  height: 3px;
+
+  border-radius: 999px;
+
+  background: #2fd684;
+
+  box-shadow:
+    0 0 8px rgba(47, 214, 132, 0.9),
+    0 0 18px rgba(47, 214, 132, 0.45);
+}
+
+.scanner-message-panel {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  left: 28px;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  padding: 18px 20px;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+
+  background: rgba(8, 10, 11, 0.8);
+  color: #ffffff;
+
+  backdrop-filter: blur(10px);
+}
+
+.scanner-message-panel svg {
+  flex-shrink: 0;
+  color: #20c77a;
+}
+
+.scanner-message-panel strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.scanner-message-panel span {
+  display: block;
+
+  color: #c8cecc;
+}
+
+.scanner-controls-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+
+  padding: 24px 0 4px;
+}
+
+.camera-main-button {
+  min-width: 220px;
+
+  justify-content: center;
+
+  font-size: 1rem;
+}
+
+.camera-select {
+  width: min(320px, 100%);
+}
+
+.camera-select select {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .scanner-card-clean {
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .scanner-view-clean {
+    min-height: 420px;
+  }
+
+  .scanner-video {
+    height: 420px;
+  }
+
+  .scanner-frame-clean {
+    inset: 23% 12%;
+  }
+
+  .scanner-message-panel {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+  }
+
+  .camera-state-badge {
+    top: 16px;
+    left: 16px;
+  }
+
+  .camera-main-button {
+    width: min(260px, 100%);
+  }
+}

@@ -62,6 +62,7 @@ export function ScannerClient() {
     }
 
     setActive(false);
+    setMessage("Start the camera, then point it at a barcode.");
   }, []);
 
   const lookupBarcode = useCallback(
@@ -251,34 +252,66 @@ export function ScannerClient() {
 
   return (
     <div className="scanner-layout">
-      <section className="scanner-card">
-        <div className="scanner-view">
-          <video ref={videoRef} autoPlay playsInline muted className="scanner-video"/>
-          <div className="scanner-frame" aria-hidden="true">
-            <div className="scanner-line" />
-          </div>
+      <section className="scanner-card scanner-card-clean">
+        <div className="scanner-view scanner-view-clean">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="scanner-video"
+          />
 
           {!active ? (
-            <div className="scanner-placeholder">
-              <CameraOff size={32} aria-hidden="true" />
-              <span>Camera stopped</span>
+            <div className="camera-state-badge">
+              <span className="camera-state-dot" />
+              Camera stopped
             </div>
           ) : null}
+
+          <div className="scanner-frame-clean" aria-hidden="true">
+            <span className="corner corner-top-left" />
+            <span className="corner corner-top-right" />
+            <span className="corner corner-bottom-left" />
+            <span className="corner corner-bottom-right" />
+
+            <div className="scanner-line-clean" />
+          </div>
+
+          <div className="scanner-message-panel">
+            {lookingUp ? (
+              <LoaderCircle
+                className="spin"
+                size={26}
+                aria-hidden="true"
+              />
+            ) : (
+              <ScanLine size={26} aria-hidden="true" />
+            )}
+
+            <div>
+              <strong>
+                {lookingUp
+                  ? "Looking up barcode"
+                  : active
+                    ? "Camera active"
+                    : "Camera inactive"}
+              </strong>
+
+              <span>
+                {lookingUp
+                  ? message
+                  : active
+                    ? "Hold a barcode inside the frame."
+                    : "Start the camera to scan a barcode."}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="scanner-status" role="status">
-          {lookingUp ? (
-            <LoaderCircle className="spin" size={19} />
-          ) : (
-            <ScanLine size={19} />
-          )}
-
-          <span>{message}</span>
-        </div>
-
-        <div className="scanner-controls">
+        <div className="scanner-controls scanner-controls-centered">
           {devices.length > 1 ? (
-            <label>
+            <label className="camera-select">
               Camera
 
               <select
@@ -301,20 +334,20 @@ export function ScannerClient() {
 
           {active ? (
             <button
-              className="button button-secondary"
+              className="button button-secondary camera-main-button"
               type="button"
               onClick={stopScanner}
             >
-              <CameraOff size={18} aria-hidden="true" />
+              <CameraOff size={20} aria-hidden="true" />
               Stop camera
             </button>
           ) : (
             <button
-              className="button button-primary"
+              className="button button-primary camera-main-button"
               type="button"
               onClick={() => void startScanner()}
             >
-              <Camera size={18} aria-hidden="true" />
+              <Camera size={20} aria-hidden="true" />
               Start camera
             </button>
           )}
@@ -326,10 +359,7 @@ export function ScannerClient() {
 
         <div>
           <h2>Enter a barcode</h2>
-
-          <p>
-            Use this option when camera access is unavailable.
-          </p>
+          <p>Use this option when camera access is unavailable.</p>
         </div>
 
         <form onSubmit={submitManual}>
