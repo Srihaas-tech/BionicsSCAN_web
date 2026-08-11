@@ -12,18 +12,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const requestedType = request.nextUrl.searchParams.get("type");
-  if (requestedType && !isInventoryType(requestedType)) {
-    return errorResponse("The inventory type is invalid.", 400, "INVALID_TYPE");
+
+  if (requestedType !== null && !isInventoryType(requestedType)) {
+    return errorResponse(
+      "The inventory type is invalid.",
+      400,
+      "INVALID_TYPE",
+    );
   }
 
   try {
-    const items = await listInventoryItems(requestedType || undefined);
+    const items = await listInventoryItems(
+      requestedType !== null ? requestedType : undefined,
+    );
+
     return NextResponse.json(
       { items },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     console.error("Inventory list failed", error);
-    return errorResponse("The database is unavailable.", 503, "DATABASE_UNAVAILABLE");
+
+    return errorResponse(
+      "The database is unavailable.",
+      503,
+      "DATABASE_UNAVAILABLE",
+    );
   }
 }

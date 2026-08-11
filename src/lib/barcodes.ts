@@ -1,4 +1,4 @@
-import bwipjs from "bwip-js";
+import bwipjs from "@bwip-js/node";
 import { normalizeBarcode } from "./inventory";
 
 const BARCODE_PATTERN = /^[A-Z0-9._/-]{1,64}$/;
