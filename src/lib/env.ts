@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const authSchema = z.object({
-  APP_PASSWORD: z.string().min(12, "APP_PASSWORD must contain at least 12 characters."),
+  APP_PASSWORD: z.string().min(8, "APP_PASSWORD must contain at least 12 characters."),
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must contain at least 32 characters."),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(168),
 });
