@@ -1,81 +1,73 @@
-import type { InventoryType } from "../types/inventory";
-import { INVENTORY_TYPES } from "../types/inventory";
+import type { InventoryType } from "@/src/types/inventory";
+import { applyExternalInventoryQuantity } from "@/src/db/queries";
+import { readSheetRows } from "@/src/lib/google-sheets";
 
-export interface InventoryMetadata {
-  label: string;
-  shortLabel: string;
-  singular: string;
-  unit: "mm" | "T";
-  sizeField: "Length" | "Teeth";
-  barcodePrefix: string;
+export interface SyncResult {
+  checked: number;
+  updated: number;
+  skipped: number;
+  errors: number;
 }
 
-export const INVENTORY_META: Record<InventoryType, InventoryMetadata> = {
-  BELT_9MM: {
-    label: "9mm Belts",
-    shortLabel: "9mm",
-    singular: "9mm Belt",
-    unit: "mm",
-    sizeField: "Length",
-    barcodePrefix: "B9",
-  },
-  BELT_15MM: {
-    label: "15mm Belts",
-    shortLabel: "15mm",
-    singular: "15mm Belt",
-    unit: "mm",
-    sizeField: "Length",
-    barcodePrefix: "B15",
-  },
-  GEAR: {
-    label: "Gears",
-    shortLabel: "Gears",
-    singular: "Gear",
-    unit: "T",
-    sizeField: "Teeth",
-    barcodePrefix: "GR",
-  },
-  SPROCKET: {
-    label: "Sprockets",
-    shortLabel: "Sprockets",
-    singular: "Sprocket",
-    unit: "T",
-    sizeField: "Teeth",
-    barcodePrefix: "SP",
-  },
-};
+const INVENTORY_TYPES: InventoryType[] = [
+  "BELT_9MM",
+  "BELT_15MM",
+  "GEAR",
+  "SPROCKET",
+];
 
-export function isInventoryType(value: unknown): value is InventoryType {
-  return typeof value === "string" && INVENTORY_TYPES.includes(value as InventoryType);
-}
+export async function syncSheetToDatabase(
+  type?: InventoryType,
+): Promise<SyncResult> {
+  const result: SyncResult = {
+    checked: 0,
+    updated: 0,
+    skipped: 0,
+    errors: 0,
+  };
 
-export function normalizeBarcode(value: string): string {
-  return value.trim().toUpperCase();
-}
+  const typesToSync = type ? [type] : INVENTORY_TYPES;
 
-export function formatItemSize(type: InventoryType, size: number): string {
-  return `${size}${INVENTORY_META[type].unit}`;
-}
+  for (const inventoryType of typesToSync) {
+    let rows;
 
-export function formatItemTitle(type: InventoryType, size: number): string {
-  return `${INVENTORY_META[type].singular} ${formatItemSize(type, size)}`;
-}
+    try {
+      rows = await readSheetRows(inventoryType);
+    } catch (error) {
+      console.error(
+        `Spreadsheet read failed for ${inventoryType}`,
+        error,
+      );
 
-export function getStockState(quantity: number): {
-  label: "Available" | "Low stock" | "Out of stock";
-  tone: "good" | "warning" | "danger";
-} {
-  if (quantity <= 0) {
-    return { label: "Out of stock", tone: "danger" };
+      result.errors += 1;
+      continue;
+    }
+
+    for (const row of rows) {
+      result.checked += 1;
+
+      try {
+        const updated = await applyExternalInventoryQuantity(
+          row.barcode,
+          row.quantity,
+          row.updatedAt,
+        );
+
+        if (updated) {
+          result.updated += 1;
+        } else {
+          result.skipped += 1;
+        }
+      } catch (error) {
+        console.error(
+          `Spreadsheet sync failed for ${row.barcode}`,
+          error,
+        );
+
+        result.errors += 1;
+      }
+    }
   }
 
-  if (quantity <= 2) {
-    return { label: "Low stock", tone: "warning" };
-  }
-
-  return { label: "Available", tone: "good" };
-}
-
-export function isValidQuantityDelta(value: unknown): value is 1 | -1 {
-  return value === 1 || value === -1;
+  return result;
 }
