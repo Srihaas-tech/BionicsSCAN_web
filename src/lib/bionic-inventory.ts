@@ -1,384 +1,429 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { z } from "zod";
 
-import {
-  adjustBionicInventory,
-  BionicInventoryClientError,
-  listBionicInventory,
-  mapBionicPart,
-} from "../src/lib/bionic-inventory";
+import type {
+  InventoryEvent,
+  InventoryItem,
+  InventoryType,
+} from "../types/inventory";
+import { INVENTORY_TYPES } from "../types/inventory";
+import { normalizeBarcode } from "./inventory";
 
-const validPart = {
-  id: "c1f7b8e2-4a5d-4e2b-9f1a-8c3d7e5f2b0a",
-  name: "9mm Belt 1250mm",
-  mfgPartNumber: "B9-1250",
-  description: "",
+const PLACEHOLDER_TIMESTAMP = "1970-01-01T00:00:00.000Z";
+
+const inventoryTypeSchema = z.enum(INVENTORY_TYPES);
+
+const bionicPartSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  mfgPartNumber: z.string().min(1),
+  description: z.string(),
+  metadata: z
+    .object({
+      inventoryType: inventoryTypeSchema,
+      size: z.number().positive(),
+    })
+    .passthrough(),
+  quantity: z.number().int().min(0),
+});
+
+const inventoryEnvelopeSchema = z.object({
+  inventory: z.array(bionicPartSchema),
+});
+
+const partEnvelopeSchema = z.object({
+  part: bionicPartSchema,
+});
+
+const transactionResultSchema = z.object({
+  transactionId: z.string().min(1),
+  recordedAt: z.string().min(1),
+  lineCount: z.number().int().positive(),
+});
+
+const transactionEnvelopeSchema = z.object({
+  transaction: transactionResultSchema,
+});
+
+const historyEntrySchema = z.object({
+  id: z.string().min(1),
+  transactionId: z.string().min(1),
+  partId: z.string().uuid(),
+  partName: z.string().min(1),
+  mfgPartNumber: z.string().min(1),
+  quantityDelta: z.number().int().refine((value) => value !== 0),
+  actor: z.string().min(1),
+  usedIn: z.string().nullable(),
+  note: z.string().nullable(),
+  recordedAt: z.string().min(1),
+});
+
+const historyEnvelopeSchema = z.object({
+  history: z.array(historyEntrySchema),
+});
+
+export interface CreateBionicPartInput {
+  name: string;
+  mfgPartNumber: string;
+  description?: string;
   metadata: {
-    inventoryType: "BELT_9MM",
-    size: 1250,
-  },
-  quantity: 7,
-};
+    inventoryType: InventoryType;
+    size: number;
+    [key: string]: unknown;
+  };
+}
 
-function saveEnvironment() {
+export interface CreateBionicTransactionInput {
+  actor: string;
+  recordedAt?: string;
+  note?: string | null;
+  lines: Array<{
+    partId: string;
+    quantityDelta: number;
+    usedIn?: string | null;
+  }>;
+}
+
+export interface BionicTransactionResult {
+  transactionId: string;
+  recordedAt: string;
+  lineCount: number;
+}
+
+export class BionicInventoryClientError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "BionicInventoryClientError";
+  }
+}
+
+function readConfiguration(): {
+  baseUrl: string;
+  apiKey: string;
+} {
+  const rawBaseUrl = process.env.BIONIC_INVENTORY_API_URL?.trim();
+  const apiKey = process.env.BIONIC_INVENTORY_API_KEY?.trim();
+
+  if (!rawBaseUrl) {
+    throw new BionicInventoryClientError(
+      "BIONIC_INVENTORY_API_URL is not configured.",
+      500,
+    );
+  }
+
+  if (!apiKey) {
+    throw new BionicInventoryClientError(
+      "BIONIC_INVENTORY_API_KEY is not configured.",
+      500,
+    );
+  }
+
   return {
-    url: process.env.BIONIC_INVENTORY_API_URL,
-    key: process.env.BIONIC_INVENTORY_API_KEY,
-    fetch: globalThis.fetch,
+    baseUrl: rawBaseUrl.replace(/\/+$/, ""),
+    apiKey,
   };
 }
 
-function restoreEnvironment(previous: ReturnType<typeof saveEnvironment>): void {
-  globalThis.fetch = previous.fetch;
-
-  if (previous.url === undefined) {
-    delete process.env.BIONIC_INVENTORY_API_URL;
-  } else {
-    process.env.BIONIC_INVENTORY_API_URL = previous.url;
-  }
-
-  if (previous.key === undefined) {
-    delete process.env.BIONIC_INVENTORY_API_KEY;
-  } else {
-    process.env.BIONIC_INVENTORY_API_KEY = previous.key;
-  }
-}
-
-function configureTestEnvironment(): void {
-  process.env.BIONIC_INVENTORY_API_URL =
-    "https://inventory.example/api/";
-  process.env.BIONIC_INVENTORY_API_KEY = "test-producer-key";
-}
-
-test("Bionic Inventory maps backend parts into website inventory items", () => {
-  assert.deepEqual(mapBionicPart(validPart), {
-    id: validPart.id,
-    inventoryType: "BELT_9MM",
-    size: 1250,
-    quantity: 7,
-    barcode: "B9-1250",
-    createdAt: "1970-01-01T00:00:00.000Z",
-    updatedAt: "1970-01-01T00:00:00.000Z",
-  });
-});
-
-test("Bionic Inventory rejects an invalid inventory type", () => {
-  assert.throws(() =>
-    mapBionicPart({
-      ...validPart,
-      metadata: {
-        inventoryType: "UNKNOWN",
-        size: 1250,
-      },
-    }),
-  );
-});
-
-test("Bionic Inventory rejects a non-positive size", () => {
-  assert.throws(() =>
-    mapBionicPart({
-      ...validPart,
-      metadata: {
-        inventoryType: "BELT_9MM",
-        size: 0,
-      },
-    }),
-  );
-});
-
-test("Bionic Inventory rejects a non-numeric size", () => {
-  assert.throws(() =>
-    mapBionicPart({
-      ...validPart,
-      metadata: {
-        inventoryType: "BELT_9MM",
-        size: "1250",
-      },
-    }),
-  );
-});
-
-test("Bionic Inventory rejects an invalid UUID", () => {
-  assert.throws(() =>
-    mapBionicPart({
-      ...validPart,
-      id: "not-a-uuid",
-    }),
-  );
-});
-
-test("Bionic Inventory rejects a missing manufacturer part number", () => {
-  const part = {
-    ...validPart,
-  } as Partial<typeof validPart>;
-
-  delete part.mfgPartNumber;
-
-  assert.throws(() => mapBionicPart(part));
-});
-
-test("Bionic Inventory rejects a non-integer quantity", () => {
-  assert.throws(() =>
-    mapBionicPart({
-      ...validPart,
-      quantity: 1.5,
-    }),
-  );
-});
-
-test("Bionic Inventory sends the producer token in the server request header", async () => {
-  const previous = saveEnvironment();
-  configureTestEnvironment();
-
-  globalThis.fetch = async (input, init) => {
-    assert.equal(
-      String(input),
-      "https://inventory.example/api/inventory",
-    );
-
-    const headers = new Headers(init?.headers);
-
-    assert.equal(
-      headers.get("x-api-token"),
-      "test-producer-key",
-    );
-    assert.equal(init?.cache, "no-store");
-
-    return new Response(
-      JSON.stringify({
-        inventory: [validPart],
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-  };
-
+async function readBackendError(response: Response): Promise<string> {
   try {
-    const items = await listBionicInventory("BELT_9MM");
-
-    assert.equal(items.length, 1);
-    assert.equal(items[0].barcode, "B9-1250");
-  } finally {
-    restoreEnvironment(previous);
-  }
-});
-
-test("Bionic Inventory filters inventory types in server code", async () => {
-  const previous = saveEnvironment();
-  configureTestEnvironment();
-
-  const gear = {
-    ...validPart,
-    id: "b4da3d15-2b6a-4efa-a951-65f9b3f3552f",
-    name: "Gear 84T",
-    mfgPartNumber: "GR-84",
-    metadata: {
-      inventoryType: "GEAR",
-      size: 84,
-    },
-  };
-
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        inventory: [validPart, gear],
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-  try {
-    const items = await listBionicInventory("GEAR");
-
-    assert.equal(items.length, 1);
-    assert.equal(items[0].barcode, "GR-84");
-  } finally {
-    restoreEnvironment(previous);
-  }
-});
-
-test("Bionic Inventory posts a transaction and reloads the changed item", async () => {
-  const previous = saveEnvironment();
-  configureTestEnvironment();
-
-  let inventoryReads = 0;
-  let transactionWrites = 0;
-
-  globalThis.fetch = async (input, init) => {
-    const url = String(input);
+    const body = (await response.json()) as unknown;
 
     if (
-      url ===
-      `https://inventory.example/api/inventory?id=${validPart.id}`
+      body &&
+      typeof body === "object" &&
+      "error" in body &&
+      typeof body.error === "string" &&
+      body.error.trim()
     ) {
-      inventoryReads += 1;
-
-      return new Response(
-        JSON.stringify({
-          inventory: [
-            {
-              ...validPart,
-              quantity: inventoryReads === 1 ? 7 : 8,
-            },
-          ],
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      return body.error.trim();
     }
+  } catch {
+    // Use the generic status message below.
+  }
 
-    if (url === "https://inventory.example/api/transactions") {
-      transactionWrites += 1;
+  return `Bionic Inventory request failed with status ${response.status}.`;
+}
 
-      assert.equal(init?.method, "POST");
+async function requestJson<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  init: RequestInit = {},
+): Promise<T> {
+  const { baseUrl, apiKey } = readConfiguration();
 
-      const requestBody = JSON.parse(String(init?.body));
+  const headers = new Headers(init.headers);
 
-      assert.deepEqual(requestBody, {
-        actor: "bionicsscan-web",
-        lines: [
-          {
-            partId: validPart.id,
-            quantityDelta: 1,
-          },
-        ],
-      });
+  headers.set("Accept", "application/json");
+  headers.set("x-api-token", apiKey);
 
-      return new Response(
-        JSON.stringify({
-          transaction: {
-            transactionId: "transaction-1",
-            recordedAt: "2026-08-12T12:00:00.000Z",
-            lineCount: 1,
-          },
-        }),
-        {
-          status: 201,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
+  if (init.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
-    throw new Error(`Unexpected request: ${url}`);
-  };
+  let response: Response;
 
   try {
-    const item = await adjustBionicInventory(
-      validPart.id,
-      1,
+    response = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new BionicInventoryClientError(
+      "Bionic Inventory is unavailable.",
+      503,
     );
-
-    assert.equal(transactionWrites, 1);
-    assert.equal(inventoryReads, 2);
-    assert.equal(item.quantity, 8);
-  } finally {
-    restoreEnvironment(previous);
   }
-});
 
-test("Bionic Inventory does not report success when a transaction fails", async () => {
-  const previous = saveEnvironment();
-  configureTestEnvironment();
+  if (!response.ok) {
+    throw new BionicInventoryClientError(
+      await readBackendError(response),
+      response.status,
+    );
+  }
 
-  globalThis.fetch = async (input) => {
-    const url = String(input);
-
-    if (url.includes("/inventory?id=")) {
-      return new Response(
-        JSON.stringify({
-          inventory: [validPart],
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-
-    if (url.endsWith("/transactions")) {
-      return new Response(
-        JSON.stringify({
-          error: "Transaction rejected.",
-        }),
-        {
-          status: 409,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-
-    throw new Error(`Unexpected request: ${url}`);
-  };
+  let body: unknown;
 
   try {
-    await assert.rejects(
-      () => adjustBionicInventory(validPart.id, 1),
-      (error: unknown) => {
-  if (!(error instanceof BionicInventoryClientError)) {
-    return false;
-  }
-
-  assert.equal(error.status, 409);
-  assert.equal(error.message, "Transaction rejected.");
-
-  return true;
-      },
+    body = await response.json();
+  } catch {
+    throw new BionicInventoryClientError(
+      "Bionic Inventory returned invalid JSON.",
+      502,
     );
-  } finally {
-    restoreEnvironment(previous);
   }
-});
 
-test("Bionic Inventory exposes safe backend failures", async () => {
-  const previous = saveEnvironment();
-  configureTestEnvironment();
+  const parsed = schema.safeParse(body);
 
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        error: "Invalid API token.",
+  if (!parsed.success) {
+    throw new BionicInventoryClientError(
+      "Bionic Inventory returned an invalid response.",
+      502,
+    );
+  }
+
+  return parsed.data;
+}
+
+export function mapBionicPart(part: unknown): InventoryItem {
+  const parsed = bionicPartSchema.parse(part);
+
+  return {
+    id: parsed.id,
+    inventoryType: parsed.metadata.inventoryType,
+    size: parsed.metadata.size,
+    quantity: parsed.quantity,
+    barcode: normalizeBarcode(parsed.mfgPartNumber),
+    createdAt: PLACEHOLDER_TIMESTAMP,
+    updatedAt: PLACEHOLDER_TIMESTAMP,
+  };
+}
+
+function sortInventory(items: InventoryItem[]): InventoryItem[] {
+  const order = new Map<InventoryType, number>(
+    INVENTORY_TYPES.map((type, index) => [type, index]),
+  );
+
+  return [...items].sort((left, right) => {
+    const typeDifference =
+      (order.get(left.inventoryType) ?? 99) -
+      (order.get(right.inventoryType) ?? 99);
+
+    return typeDifference || left.size - right.size;
+  });
+}
+
+export async function listBionicInventory(
+  type?: InventoryType,
+): Promise<InventoryItem[]> {
+  const response = await requestJson(
+    "/inventory",
+    inventoryEnvelopeSchema,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+  );
+
+  const items = response.inventory.map(mapBionicPart);
+
+  return sortInventory(
+    type
+      ? items.filter((item) => item.inventoryType === type)
+      : items,
+  );
+}
+
+export async function getBionicInventoryItem(
+  id: string,
+): Promise<InventoryItem | null> {
+  if (!z.string().uuid().safeParse(id).success) {
+    return null;
+  }
+
+  const response = await requestJson(
+    `/inventory?id=${encodeURIComponent(id)}`,
+    inventoryEnvelopeSchema,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+  );
+
+  return response.inventory.length === 0
+    ? null
+    : mapBionicPart(response.inventory[0]);
+}
+
+export async function findBionicInventoryItemByBarcode(
+  barcode: string,
+): Promise<InventoryItem | null> {
+  const normalized = normalizeBarcode(barcode);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const response = await requestJson(
+    `/inventory?mfgPartNumber=${encodeURIComponent(normalized)}`,
+    inventoryEnvelopeSchema,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+  );
+
+  return response.inventory.length === 0
+    ? null
+    : mapBionicPart(response.inventory[0]);
+}
+
+export async function createBionicPart(
+  input: CreateBionicPartInput,
+): Promise<InventoryItem> {
+  const response = await requestJson(
+    "/parts",
+    partEnvelopeSchema,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: input.name,
+        mfgPartNumber: normalizeBarcode(input.mfgPartNumber),
+        description: input.description ?? "",
+        metadata: input.metadata,
       }),
-      {
-        status: 401,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    },
+  );
 
+  return mapBionicPart(response.part);
+}
+
+export async function createBionicTransaction(
+  input: CreateBionicTransactionInput,
+): Promise<BionicTransactionResult> {
+  const response = await requestJson(
+    "/transactions",
+    transactionEnvelopeSchema,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+
+  return response.transaction;
+}
+
+export async function adjustBionicInventory(
+  id: string,
+  delta: 1 | -1,
+): Promise<InventoryItem> {
+  const current = await getBionicInventoryItem(id);
+
+  if (!current) {
+    throw new BionicInventoryClientError(
+      "The inventory item was not found.",
+      404,
+    );
+  }
+
+  if (delta === -1 && current.quantity <= 0) {
+    throw new BionicInventoryClientError(
+      "The inventory item is out of stock.",
+      409,
+    );
+  }
+
+  await createBionicTransaction({
+    actor: "bionicsscan-web",
+    lines: [
+      {
+        partId: id,
+        quantityDelta: delta,
+      },
+    ],
+  });
+
+  const updated = await getBionicInventoryItem(id);
+
+  if (!updated) {
+    throw new BionicInventoryClientError(
+      "The updated inventory item could not be loaded.",
+      502,
+    );
+  }
+
+  return updated;
+}
+
+export async function listBionicInventoryEvents(
+  item: InventoryItem,
+  limit = 12,
+): Promise<InventoryEvent[]> {
+  const safeLimit = Math.max(
+    1,
+    Math.min(200, Math.trunc(limit)),
+  );
+
+  const response = await requestJson(
+    `/history?partId=${encodeURIComponent(item.id)}&limit=${safeLimit}`,
+    historyEnvelopeSchema,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+  );
+
+  let runningQuantity = item.quantity;
+
+  return response.history.map((entry) => {
+    const afterQuantity = runningQuantity;
+    const beforeQuantity =
+      afterQuantity - entry.quantityDelta;
+
+    runningQuantity = beforeQuantity;
+
+    return {
+      id: entry.id,
+      itemId: entry.partId,
+      action:
+        entry.quantityDelta > 0
+          ? "CHECKIN"
+          : "CHECKOUT",
+      delta: entry.quantityDelta,
+      beforeQuantity,
+      afterQuantity,
+      actor: entry.actor,
+      createdAt: entry.recordedAt,
+    };
+  });
+}
+
+export async function pingBionicInventory(): Promise<boolean> {
   try {
-    await assert.rejects(
-      () => listBionicInventory(),
-      (error: unknown) => {
-  if (!(error instanceof BionicInventoryClientError)) {
+    await listBionicInventory();
+    return true;
+  } catch {
     return false;
   }
-
-  assert.equal(error.status, 409);
-  assert.equal(error.message, "Transaction rejected.");
-
-  return true;
-      },
-    );
-  } finally {
-    restoreEnvironment(previous);
-  }
-});
+}
