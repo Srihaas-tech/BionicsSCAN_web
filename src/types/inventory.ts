@@ -20,8 +20,8 @@ export interface InventoryItem {
 export interface InventoryEvent {
   id: number;
   itemId: string;
-  action: "CHECKIN" | "CHECKOUT";
-  delta: 1 | -1;
+  action: "CHECKIN" | "CHECKOUT" | "SYNC";
+  delta: number;
   beforeQuantity: number;
   afterQuantity: number;
   actor: string;

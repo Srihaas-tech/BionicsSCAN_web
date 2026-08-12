@@ -54,8 +54,18 @@ export const inventoryEvents = pgTable(
   },
   (table) => [
     index("inventory_events_item_time_index").on(table.itemId, table.createdAt),
-    check("inventory_events_action_check", sql`${table.action} IN ('CHECKIN', 'CHECKOUT')`),
-    check("inventory_events_delta_check", sql`${table.delta} IN (-1, 1)`),
+    check(
+      "inventory_events_action_check",
+      sql`${table.action} IN ('CHECKIN', 'CHECKOUT', 'SYNC')`,
+    ),
+check(
+  "inventory_events_delta_check",
+  sql`(
+    (${table.action} IN ('CHECKIN', 'CHECKOUT') AND ${table.delta} IN (-1, 1))
+    OR
+    (${table.action} = 'SYNC' AND ${table.delta} <> 0)
+  )`,
+),
     check("inventory_events_before_nonnegative", sql`${table.beforeQuantity} >= 0`),
     check("inventory_events_after_nonnegative", sql`${table.afterQuantity} >= 0`),
   ],

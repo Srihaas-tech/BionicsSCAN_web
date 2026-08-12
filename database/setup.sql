@@ -31,8 +31,15 @@ CREATE INDEX IF NOT EXISTS inventory_items_type_index
 CREATE TABLE IF NOT EXISTS inventory_events (
   id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   item_id uuid NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
-  action varchar(16) NOT NULL CHECK (action IN ('CHECKIN', 'CHECKOUT')),
-  delta integer NOT NULL CHECK (delta IN (-1, 1)),
+  action varchar(16) NOT NULL
+    CHECK (action IN ('CHECKIN', 'CHECKOUT', 'SYNC')),
+
+  delta integer NOT NULL
+    CHECK (
+      (action IN ('CHECKIN', 'CHECKOUT') AND delta IN (-1, 1))
+      OR
+      (action = 'SYNC' AND delta <> 0)
+    ),
   before_quantity integer NOT NULL CHECK (before_quantity >= 0),
   after_quantity integer NOT NULL CHECK (after_quantity >= 0),
   actor varchar(100) NOT NULL DEFAULT 'team',
