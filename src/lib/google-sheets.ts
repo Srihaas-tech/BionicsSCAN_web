@@ -9,7 +9,6 @@ export interface SheetInventoryRow {
   size: number;
   quantity: number;
   barcode: string;
-  updatedAt: Date;
   rowNumber: number;
 }
 
@@ -67,15 +66,13 @@ export function parseSheetRow(
   inventoryType: InventoryType,
   rowNumber = 0,
 ): SheetInventoryRow | null {
-  const [sizeValue, quantityValue, barcodeValue, updatedAtValue] =
-    values;
+  const [sizeValue, quantityValue, barcodeValue] = values;
 
   const size = Number(sizeValue);
   const quantity = Number(quantityValue);
-  const barcode = barcodeValue?.trim();
-  const timestampText = updatedAtValue?.trim();
+  const barcode = barcodeValue?.trim().toUpperCase();
 
-  if (!Number.isFinite(size)) {
+  if (!Number.isFinite(size) || size <= 0) {
     return null;
   }
 
@@ -87,22 +84,11 @@ export function parseSheetRow(
     return null;
   }
 
-  if (!timestampText) {
-    return null;
-  }
-
-  const updatedAt = new Date(timestampText);
-
-  if (Number.isNaN(updatedAt.getTime())) {
-    return null;
-  }
-
   return {
     inventoryType,
     size,
     quantity,
     barcode,
-    updatedAt,
     rowNumber,
   };
 }
@@ -116,7 +102,7 @@ export async function readSheetRows(
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${sheetName}'!A2:D`,
+    range: `'${sheetName}'!A2:C`,
   });
 
   const rows = response.data.values ?? [];
@@ -146,18 +132,19 @@ export async function writeItemToSheet(
   const spreadsheetId = getSpreadsheetId();
   const sheetName = sheetNameForType(item.inventoryType);
 
-  const barcodeResponse =
-    await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${sheetName}'!C2:C`,
-    });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${sheetName}'!C2:C`,
+  });
 
-  const barcodeRows = barcodeResponse.data.values ?? [];
+  const rows = response.data.values ?? [];
 
-  const index = barcodeRows.findIndex((row) => {
-    const barcode = String(row[0] ?? "").trim();
+  const index = rows.findIndex((row) => {
+    const barcode = String(row[0] ?? "")
+      .trim()
+      .toUpperCase();
 
-    return barcode === item.barcode;
+    return barcode === item.barcode.trim().toUpperCase();
   });
 
   if (index === -1) {
@@ -170,16 +157,10 @@ export async function writeItemToSheet(
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${sheetName}'!B${rowNumber}:D${rowNumber}`,
+    range: `'${sheetName}'!B${rowNumber}`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [
-        [
-          item.quantity,
-          item.barcode,
-          item.updatedAt,
-        ],
-      ],
+      values: [[item.quantity]],
     },
   });
 }

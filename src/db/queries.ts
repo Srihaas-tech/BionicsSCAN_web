@@ -176,18 +176,18 @@ export async function adjustInventoryQuantity(
 export async function applyExternalInventoryQuantity(
   barcode: string,
   quantity: number,
-  updatedAt: Date,
   actor = "google-sheet",
 ): Promise<InventoryItem | null> {
   if (!Number.isInteger(quantity) || quantity < 0) {
     return null;
   }
 
-  if (Number.isNaN(updatedAt.getTime())) {
+  const normalized = normalizeBarcode(barcode);
+
+  if (!normalized) {
     return null;
   }
 
-  const normalized = normalizeBarcode(barcode);
   const client = await getPool().connect();
 
   try {
@@ -215,41 +215,16 @@ export async function applyExternalInventoryQuantity(
 
     const current = existing.rows[0];
 
-    if (updatedAt.getTime() <= current.updated_at.getTime()) {
+    if (current.quantity === quantity) {
       await client.query("ROLLBACK");
       return null;
-    }
-
-    if (current.quantity === quantity) {
-      const refreshed = await client.query<RawInventoryRow>(
-        `UPDATE inventory_items
-         SET updated_at = $2
-         WHERE id = $1::uuid
-           AND updated_at < $2
-         RETURNING
-           id,
-           inventory_type,
-           size,
-           quantity,
-           barcode,
-           created_at,
-           updated_at`,
-        [current.id, updatedAt],
-      );
-
-      await client.query("COMMIT");
-
-      return refreshed.rowCount === 1
-        ? rawToItem(refreshed.rows[0])
-        : null;
     }
 
     const update = await client.query<RawInventoryRow>(
       `UPDATE inventory_items
        SET quantity = $2,
-           updated_at = $3
+           updated_at = NOW()
        WHERE id = $1::uuid
-         AND updated_at < $3
        RETURNING
          id,
          inventory_type,
@@ -258,7 +233,10 @@ export async function applyExternalInventoryQuantity(
          barcode,
          created_at,
          updated_at`,
-      [current.id, quantity, updatedAt],
+      [
+        current.id,
+        quantity,
+      ],
     );
 
     if (update.rowCount !== 1) {
@@ -278,7 +256,14 @@ export async function applyExternalInventoryQuantity(
          after_quantity,
          actor
        )
-       VALUES ($1::uuid, 'SYNC', $2, $3, $4, $5)`,
+       VALUES (
+         $1::uuid,
+         'SYNC',
+         $2,
+         $3,
+         $4,
+         $5
+       )`,
       [
         current.id,
         delta,

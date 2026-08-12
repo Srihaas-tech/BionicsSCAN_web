@@ -26,7 +26,9 @@ export async function syncSheetToDatabase(
     errors: 0,
   };
 
-  const typesToSync = type ? [type] : INVENTORY_TYPES;
+  const typesToSync = type
+    ? [type]
+    : INVENTORY_TYPES;
 
   for (const inventoryType of typesToSync) {
     let rows;
@@ -47,11 +49,11 @@ export async function syncSheetToDatabase(
       result.checked += 1;
 
       try {
-        const updated = await applyExternalInventoryQuantity(
-          row.barcode,
-          row.quantity,
-          row.updatedAt,
-        );
+        const updated =
+          await applyExternalInventoryQuantity(
+            row.barcode,
+            row.quantity,
+          );
 
         if (updated) {
           result.updated += 1;
