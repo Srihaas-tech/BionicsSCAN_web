@@ -304,7 +304,7 @@ export function ScannerClient() {
                 {lookingUp
                   ? "Looking up barcode"
                   : active
-                    ? "Camera active"
+                    ? "Monkey active"
                     : "Camera inactive"}
               </strong>
 
@@ -312,7 +312,7 @@ export function ScannerClient() {
                 {lookingUp
                   ? message
                   : active
-                    ? "Hold a barcode inside the frame."
+                    ? "Hold a monkey inside the frame."
                     : "Start the camera to scan a barcode."}
               </span>
             </div>
