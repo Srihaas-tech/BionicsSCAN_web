@@ -1,27 +1,56 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Barcode, Clock3, Minus, PackageCheck, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  Barcode,
+  Clock3,
+  Minus,
+  PackageCheck,
+  Plus,
+} from "lucide-react";
+
 import { QuantityControls } from "@/components/quantity-controls";
-import { getInventoryItemById, listInventoryEvents } from "@/src/db/queries";
-import { formatItemSize, formatItemTitle, getStockState, INVENTORY_META } from "@/src/lib/inventory";
+import {
+  getBionicInventoryItem,
+  listBionicInventoryEvents,
+} from "@/src/lib/bionic-inventory";
+import {
+  formatItemSize,
+  formatItemTitle,
+  getStockState,
+  INVENTORY_META,
+} from "@/src/lib/inventory";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
   const { id } = await params;
-  const item = await getInventoryItemById(id);
-  return { title: item ? formatItemTitle(item.inventoryType, item.size) : "Inventory item" };
+  const item = await getBionicInventoryItem(id);
+  return {
+    title: item
+      ? formatItemTitle(item.inventoryType, item.size)
+      : "Inventory item",
+  };
 }
 
-export default async function InventoryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function InventoryDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
-  const item = await getInventoryItemById(id);
+  const item = await getBionicInventoryItem(id);
+
   if (!item) {
     notFound();
   }
 
-  const events = await listInventoryEvents(item.id);
+  const events = await listBionicInventoryEvents(item);
   const metadata = INVENTORY_META[item.inventoryType];
   const stock = getStockState(item.quantity);
 
@@ -54,12 +83,26 @@ export default async function InventoryDetailPage({ params }: { params: Promise<
             <h2>Item information</h2>
           </div>
           <dl className="detail-list">
-            <div><dt>Category</dt><dd>{metadata.label}</dd></div>
-            <div><dt>{metadata.sizeField}</dt><dd>{formatItemSize(item.inventoryType, item.size)}</dd></div>
-            <div><dt>Barcode</dt><dd><code>{item.barcode}</code></dd></div>
-            <div><dt>Last updated</dt><dd>{new Date(item.updatedAt).toLocaleString()}</dd></div>
+            <div>
+              <dt>Category</dt>
+              <dd>{metadata.label}</dd>
+            </div>
+            <div>
+              <dt>{metadata.sizeField}</dt>
+              <dd>{formatItemSize(item.inventoryType, item.size)}</dd>
+            </div>
+            <div>
+              <dt>Barcode</dt>
+              <dd>
+                <code>{item.barcode}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Data source</dt>
+              <dd>Bionic Inventory</dd>
+            </div>
           </dl>
-          <QuantityControls key={item.updatedAt} initialItem={item} />
+          <QuantityControls initialItem={item} />
         </section>
 
         <section className="detail-card activity-card">
@@ -76,14 +119,30 @@ export default async function InventoryDetailPage({ params }: { params: Promise<
             <ol className="activity-list">
               {events.map((event) => (
                 <li key={event.id}>
-                  <span className={event.delta === 1 ? "activity-icon positive" : "activity-icon negative"}>
-                    {event.delta === 1 ? <Plus size={16} /> : <Minus size={16} />}
+                  <span
+                    className={
+                      event.delta > 0
+                        ? "activity-icon positive"
+                        : "activity-icon negative"
+                    }
+                  >
+                    {event.delta > 0 ? (
+                      <Plus size={16} />
+                    ) : (
+                      <Minus size={16} />
+                    )}
                   </span>
                   <div>
-                    <strong>{event.action === "CHECKIN" ? "Checked in" : "Checked out"}</strong>
-                    <small>{event.beforeQuantity} → {event.afterQuantity}</small>
+                    <strong>
+                      {event.delta > 0 ? "Checked in" : "Checked out"}
+                    </strong>
+                    <small>
+                      {event.beforeQuantity} → {event.afterQuantity}
+                    </small>
                   </div>
-                  <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString()}</time>
+                  <time dateTime={event.createdAt}>
+                    {new Date(event.createdAt).toLocaleString()}
+                  </time>
                 </li>
               ))}
             </ol>

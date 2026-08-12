@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { listInventoryItems } from "@/src/db/queries";
+
+import { listBionicInventory } from "@/src/lib/bionic-inventory";
 import { errorResponse } from "@/src/lib/http";
 import { isInventoryType } from "@/src/lib/inventory";
 import { hasApiSession } from "@/src/lib/session";
-import { syncSheetToDatabase } from "@/src/lib/inventory-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -26,17 +26,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const inventoryType =
-    requestedType !== null ? requestedType : undefined; 
+  const inventoryType = requestedType !== null ? requestedType : undefined;
 
   try {
-    try {
-      await syncSheetToDatabase(inventoryType);
-    } catch (error) {
-      console.error("Spreadsheet import failed", error);
-    }
-
-    const items = await listInventoryItems(inventoryType);
+    const items = await listBionicInventory(inventoryType);
 
     return NextResponse.json(
       { items },
@@ -50,9 +43,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     console.error("Inventory list failed", error);
 
     return errorResponse(
-      "The database is unavailable.",
+      "The inventory backend is unavailable.",
       503,
-      "DATABASE_UNAVAILABLE",
+      "INVENTORY_UNAVAILABLE",
     );
   }
 }

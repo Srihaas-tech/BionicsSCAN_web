@@ -18,7 +18,7 @@ export interface InventoryItem {
 }
 
 export interface InventoryEvent {
-  id: number;
+  id: string | number;
   itemId: string;
   action: "CHECKIN" | "CHECKOUT" | "SYNC";
   delta: number;

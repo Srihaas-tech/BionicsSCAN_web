@@ -3,29 +3,21 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import {
-  adjustInventoryQuantity,
-  InventoryMutationError,
-} from "@/src/db/queries";
-import { writeItemToSheet } from "@/src/lib/google-sheets";
+  adjustBionicInventory,
+  BionicInventoryClientError,
+} from "@/src/lib/bionic-inventory";
 import { errorResponse, isSameOrigin } from "@/src/lib/http";
 import { hasApiSession } from "@/src/lib/session";
 
 const requestSchema = z.object({
-  delta: z.union([
-    z.literal(-1),
-    z.literal(1),
-  ]),
+  delta: z.union([z.literal(-1), z.literal(1)]),
 });
 
 const idSchema = z.string().uuid();
 
 export async function POST(
   request: NextRequest,
-  context: {
-    params: Promise<{
-      id: string;
-    }>;
-  },
+  context: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   if (!hasApiSession(request)) {
     return errorResponse(
@@ -44,7 +36,6 @@ export async function POST(
   }
 
   const { id } = await context.params;
-
   if (!idSchema.safeParse(id).success) {
     return errorResponse(
       "The inventory ID is invalid.",
@@ -54,7 +45,6 @@ export async function POST(
   }
 
   let body: unknown;
-
   try {
     body = await request.json();
   } catch {
@@ -65,9 +55,7 @@ export async function POST(
     );
   }
 
-  const parsed =
-    requestSchema.safeParse(body);
-
+  const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
     return errorResponse(
       "The quantity change must be 1 or -1.",
@@ -77,54 +65,30 @@ export async function POST(
   }
 
   try {
-    const item =
-      await adjustInventoryQuantity(
-        id,
-        parsed.data.delta,
-      );
-
-    try {
-      await writeItemToSheet(item);
-    } catch (error) {
-      console.error(
-        `Google Sheets update failed for ${item.barcode}`,
-        error,
-      );
-    }
+    const item = await adjustBionicInventory(id, parsed.data.delta);
 
     revalidatePath("/");
-    revalidatePath(
-      `/inventory/${id}`,
-    );
+    revalidatePath(`/inventory/${id}`);
 
-    return NextResponse.json({
-      item,
-    });
+    return NextResponse.json({ item });
   } catch (error) {
-    if (
-      error instanceof
-      InventoryMutationError
-    ) {
+    if (error instanceof BionicInventoryClientError) {
       const status =
-        error.code === "NOT_FOUND"
-          ? 404
-          : 409;
+        error.status >= 400 && error.status < 500
+          ? error.status
+          : 503;
 
       return errorResponse(
         error.message,
         status,
-        error.code,
+        "BIONIC_INVENTORY_ERROR",
       );
     }
 
-    console.error(
-      "Quantity update failed",
-      error,
-    );
-
+    console.error("Quantity update failed", error);
     return errorResponse(
       "The quantity update failed.",
-      500,
+      503,
       "UPDATE_FAILED",
     );
   }

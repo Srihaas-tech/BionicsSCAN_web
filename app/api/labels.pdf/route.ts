@@ -1,7 +1,8 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { type NextRequest } from "next/server";
-import { listInventoryItems } from "@/src/db/queries";
+
 import { generateBarcodePng } from "@/src/lib/barcodes";
+import { listBionicInventory } from "@/src/lib/bionic-inventory";
 import { errorResponse } from "@/src/lib/http";
 import { INVENTORY_META, isInventoryType } from "@/src/lib/inventory";
 import { hasApiSession } from "@/src/lib/session";
@@ -11,16 +12,24 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest): Promise<Response> {
   if (!hasApiSession(request)) {
-    return errorResponse("Authentication is required.", 401, "UNAUTHORIZED");
+    return errorResponse(
+      "Authentication is required.",
+      401,
+      "UNAUTHORIZED",
+    );
   }
 
   const requestedType = request.nextUrl.searchParams.get("type");
   if (!requestedType || !isInventoryType(requestedType)) {
-    return errorResponse("The inventory type is invalid.", 400, "INVALID_TYPE");
+    return errorResponse(
+      "The inventory type is invalid.",
+      400,
+      "INVALID_TYPE",
+    );
   }
 
   try {
-    const items = await listInventoryItems(requestedType);
+    const items = await listBionicInventory(requestedType);
     const metadata = INVENTORY_META[requestedType];
     const document = await PDFDocument.create();
     const regular = await document.embedFont(StandardFonts.Helvetica);
@@ -34,7 +43,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     const columns = 2;
     const rows = 7;
     const labelWidth = (pageWidth - margin * 2 - columnGap) / columns;
-    const labelHeight = (pageHeight - margin * 2 - rowGap * (rows - 1)) / rows;
+    const labelHeight =
+      (pageHeight - margin * 2 - rowGap * (rows - 1)) / rows;
     const labelsPerPage = columns * rows;
     let page = document.addPage([pageWidth, pageHeight]);
 
@@ -47,7 +57,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       const column = pageIndex % columns;
       const row = Math.floor(pageIndex / columns);
       const x = margin + column * (labelWidth + columnGap);
-      const y = pageHeight - margin - labelHeight - row * (labelHeight + rowGap);
+      const y =
+        pageHeight - margin - labelHeight - row * (labelHeight + rowGap);
       const item = items[index];
 
       page.drawRectangle({
@@ -75,7 +86,10 @@ export async function GET(request: NextRequest): Promise<Response> {
       const barcode = await document.embedPng(new Uint8Array(barcodePng));
       const maximumWidth = labelWidth - 34;
       const maximumHeight = 46;
-      const scale = Math.min(maximumWidth / barcode.width, maximumHeight / barcode.height);
+      const scale = Math.min(
+        maximumWidth / barcode.width,
+        maximumHeight / barcode.height,
+      );
       const barcodeWidth = barcode.width * scale;
       const barcodeHeight = barcode.height * scale;
       page.drawImage(barcode, {
@@ -103,6 +117,10 @@ export async function GET(request: NextRequest): Promise<Response> {
     });
   } catch (error) {
     console.error("Label PDF generation failed", error);
-    return errorResponse("The label PDF could not be generated.", 500, "PDF_FAILED");
+    return errorResponse(
+      "The label PDF could not be generated.",
+      500,
+      "PDF_FAILED",
+    );
   }
 }

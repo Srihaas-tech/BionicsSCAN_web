@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
+
 import { LabelGrid } from "@/components/label-grid";
-import { listInventoryItems } from "@/src/db/queries";
+import { listBionicInventory } from "@/src/lib/bionic-inventory";
 
 export const metadata: Metadata = { title: "Barcode labels" };
 export const dynamic = "force-dynamic";
 
 export default async function LabelsPage() {
-  const items = await listInventoryItems();
+  const items = await listBionicInventory();
+
   return (
     <main className="page-shell labels-page" id="main-content">
       <section className="page-heading no-print">
