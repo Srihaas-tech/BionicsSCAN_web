@@ -15,6 +15,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "db:studio": "drizzle-kit studio",
+    "inventory:migrate:bionic": "tsx scripts/migrate-to-bionic-inventory.ts",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
